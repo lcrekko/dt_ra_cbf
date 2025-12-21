@@ -154,7 +154,7 @@ class AdaptiveSafetyFilter():
 
         # Extract the safe control input
         usf = sol.value(self.usf)
-        return np.atleast_1d(usf)
+        return np.atleast_1d(usf), E_theta
 
 
          
