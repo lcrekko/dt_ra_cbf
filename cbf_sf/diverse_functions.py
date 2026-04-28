@@ -35,6 +35,25 @@ def ext_kappa(x, mode: str):
     else:
         raise ValueError("Invalid input! Please use [linear], [arctan] or [tanh]")
 
+def ext_kappa_pmsm(x, mode: str):
+    """
+    This is the extended class kappa function.
+
+    Parameters:
+    1. x
+    2. mode: "linear", "arctan", "tanh"
+
+    Output: y
+    """
+    if mode == "linear":
+        return (1 - 5e-3) * x
+    elif mode == "arctan":
+        return np.arctan(x)
+    elif mode == "tanh":
+        return np.tanh(x)
+    else:
+        raise ValueError("Invalid input! Please use [linear], [arctan] or [tanh]")
+
 
 # ------------- Control barrier function --------------
 def cbf_acc_linear(x, mode = "SIM"):
@@ -52,6 +71,30 @@ def cbf_acc_linear(x, mode = "SIM"):
     """
     buffer = 0.5
     margin = x[1] - 1.8 * x[0]
+
+    if mode == "SIM":
+        return margin - buffer
+    elif mode == "NLP": 
+        return margin - buffer
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+# ------------- Control barrier function --------------
+def cbf_pmsm_linear(x, mode = "SIM"):
+    """
+    This is the control barrier function for adaptive cruise control
+    used in safety filter optimization problem.
+
+    Here we use a quadratic barrier function.
+
+    Parameters:
+    1. x: state
+        x[0]: velocity
+        x[1]: distance
+    2. mode: "SIM" or "NLP", default value is "SIM"
+    """
+    buffer = 0
+    margin = 7.5 - x[1]
 
     if mode == "SIM":
         return margin - buffer

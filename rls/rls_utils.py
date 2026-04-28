@@ -90,3 +90,21 @@ def interleave_vec(lb_vec, ub_vec):
     h_theta[rows + 1] = -v      # odd  rows:  -v
  
     return h_theta
+
+
+def pmsm_recover(hat_theta, notarray = True):
+    """
+    This function recovers the PMSM parameters (J, B and phi) from the estimated parameters (theta_1, theta_2, theta_3)
+
+        :param hat_theta: the estimated parameters (theta_1, theta_2, theta_3) from the RLS estimator
+        
+        :return: the recovered PMSM parameters (J, B and phi)
+    """
+    phi_est = hat_theta[2]
+    J_est = phi_est / hat_theta[1]
+    B_est = hat_theta[0] * J_est
+
+    if notarray:
+        return {'phif': phi_est, 'J': J_est, 'B': B_est}
+    else:
+        return np.array([phi_est, J_est, B_est])

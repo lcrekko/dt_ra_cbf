@@ -155,6 +155,93 @@ class AdaptiveSafetyFilter():
         # Extract the safe control input
         usf = sol.value(self.usf)
         return np.atleast_1d(usf), E_theta
+    
+
+class AdaptiveSafetyFilterLinear():
+    """
+    This is the adaptive safety filter hand-coded for PMSM with linear CBF
+    """
+    def __init__(self, dt,
+                 gamma, L_B, bar_w,
+                 x_dim, u_dim,
+                 u_min, u_max,
+                 pmsm_params, kernel, I_max, alpha) -> None:
+        """
+        Initializing the safety filter.
+
+        Parameters:
+        1. dt: sampling time
+        3. gamma: the minimum eigenvalue of the weighting matrix
+        4. L_B: Lipschitz constant of the CBF
+        5. bar_w: disturbance norm
+        6. x_dim: [int] dimension of the state vector
+        7. u_dim: [int] dimension of the control input
+        8. u_min: input limit (lower bound)
+        9. u_max: input limit (upper bound)
+        10. pmsm_params: [dict] parameters of the PMSM system
+        11. kernel: [function] the kernel function
+        12. I_max: maximum current (input) [A]
+        13. alpha: the slope of the linear CBF
+        """
+        # --------- passing functions and parameters -----------
+        self.dt = dt
+        self.gamma = gamma
+        self.L_B = L_B
+        self.bar_w = bar_w
+        self.u_min = u_min
+        self.u_max = u_max
+        self.pmsm_params = pmsm_params
+        self.kernel = kernel
+        self.I_max = I_max
+        self.alpha = alpha
+        self.u_gain = self.dt / self.pmsm_params['L']
+    
+    def filter(self, x_t, error_bound, diff_para, est_para, unom_val):
+        """
+        This is the main filter function that generates the safe input.
+
+        :param x_t: state value
+        :param error_bound: error bound
+        :param diff_para: increments norm
+        :param est_para: parameter estimation value (only phif is relevant)
+        :param unom_val: nominal control input
+        """
+        # -------- Computation of E_{\theta,t}(x) -----------
+        # compute the norm of the kernel
+        kernel_val = self.kernel(x_t, self.dt)
+        kernel_norm = np.linalg.norm(kernel_val[:, 1], ord = 2)
+
+        # compute the positive term in the filtering condition
+        pos_1 = self.alpha * self.I_max
+        pos_2 = self.dt / self.pmsm_params['L'] * (self.pmsm_params['num_pole'] * est_para[0] * x_t[0] + self.pmsm_params['R'] * x_t[1])
+        pos_total = pos_1 + pos_2
+
+        # print("pos_total: ", pos_total)
+
+        # compute the negative term in the filtering condition
+        neg_1 = self.L_B * self.bar_w + self.alpha * x_t[1]
+        neg_2 = ( 1 / self.gamma ) * (self.alpha * (error_bound**2) + diff_para**2)
+        neg_3 = (self.L_B * kernel_norm + diff_para / self.gamma) * error_bound
+        neg_total = neg_1 + neg_2 + neg_3
+
+        # negative part barrier condition
+        pos_total_2 = pos_2 + neg_2 + neg_3 + self.L_B * self.bar_w
+        neg_total_2 = self.alpha * (x_t[1] + self.I_max) 
+
+        #print("neg_total: ", neg_total)
+
+        u_critical = (pos_total - neg_total) / self.u_gain
+        u_critical_2 = (pos_total_2 - neg_total_2) / self.u_gain
+
+        if u_critical > unom_val and unom_val > u_critical_2:
+            usf = unom_val
+        elif u_critical <= unom_val:
+            usf = u_critical
+        else: # unom_val <= u_critical_2
+            usf = u_critical_2
+        
+        return np.atleast_1d(usf)
+    
 
 
          

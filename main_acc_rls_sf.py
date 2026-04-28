@@ -139,7 +139,7 @@ time_s = dt * np.arange(0, T)
 # lr = 0.1
 
 # # number of disturbance realizations for simulation
-# N_sim = 10
+# N_sim = 100
 
 # # Initialize the output trajectory for adaptive safe control
 # xa_traj = np.zeros((N_sim, T + 1, x_dim)) # state
@@ -323,11 +323,11 @@ legend_3 = "aMPC"
 legend_4 = "raMPC"
 linestyle_1 = '-'
 linestyle_2 = '-'
-linestyle_3 = '--'
-linestyle_4 = '--'
+linestyle_3 = '-'
+linestyle_4 = '-'
 
 # --------- State and input subplots (3 rows, 1 column)
-fig_sys, axes_sys = plt.subplots(3, 1, figsize=(4.5, 4.5))
+fig_sys, axes_sys = plt.subplots(3, 1, figsize=(4.5, 4))
 
 # Plot 1
 # axes[0].plot(time_state, v_traj_opt, label='velocity (OPT)')
@@ -342,11 +342,11 @@ plotter_kernel(axes_sys[0], time, xs_traj[:, :, 0],
 # axes_sys[0].axhline(y=para_star[0], label = 'true drag coefficient', color='r', linestyle='--', linewidth=2)
 # axes_sys[0].set_title("Adaptive MPC with CBF-based safety filter")
 axes_sys[0].legend(loc='upper center',
-    bbox_to_anchor=(0.5, 1.55),  # position relative to the whole figure
+    bbox_to_anchor=(0.5, 1.75),  # position relative to the whole figure
     ncol=2,                        # all items in one row
     frameon=True)
 axes_sys[0].set_facecolor((0.95, 0.95, 0.95))
-axes_sys[0].set_ylabel(r'$v$[m/s]')
+axes_sys[0].set_ylabel(r'$v$ [m/s]')
 axes_sys[0].grid(True, linestyle='--', color='white', linewidth=1)
 
 axins_0 = zoomed_inset_axes(axes_sys[0], zoom = 6, loc='lower center')
@@ -379,7 +379,7 @@ plotter_kernel(axes_sys[1], time, xs_traj[:, :, 1] - 1.8*xs_traj[:, :, 0],
 # axes_sys[1].axhline(y=para_star[1], label = 'true velocity', color='r', linestyle='--', linewidth=2)
 # axes_sys[1].legend()
 axes_sys[1].set_facecolor((0.95, 0.95, 0.95))
-axes_sys[1].set_ylabel(r'$d - 1.8v$[m]')
+axes_sys[1].set_ylabel(r'$d - 1.8v$ [m]')
 axes_sys[1].grid(True, linestyle='--', color='white', linewidth=1)
 
 axins_1 = zoomed_inset_axes(axes_sys[1], zoom = 8, loc='upper right')
@@ -411,7 +411,7 @@ plotter_kernel(axes_sys[2], time_s, u_ssf_traj[:, :, 0],
 # axes_sys[2].legend()
 axes_sys[2].set_facecolor((0.95, 0.95, 0.95))
 axes_sys[2].grid(True, linestyle='--', color='white', linewidth=1)
-axes_sys[2].set_ylabel(r'$u$[N]')
+axes_sys[2].set_ylabel(r'$u$ [N]')
 
 axins_2 = zoomed_inset_axes(axes_sys[2], zoom = 2.5, loc='lower left')
 plotter_kernel(axins_2, time_s, u_asf_traj[:, :, 0], 
@@ -433,13 +433,14 @@ formatter.set_powerlimits((-3, 3))  # Force multiplier display if within 10^3 ra
 axes_sys[2].yaxis.set_major_formatter(formatter)
 
 # Set x-axis label only on the last plot
-axes_sys[2].set_xlabel('Time[s]')
+axes_sys[2].set_xlabel('Time [s]')
 
-# fig_sys.tight_layout(rect=(0, 0, 1, 0.95))
-fig_sys.savefig('cbf_performance.pdf', format='pdf', bbox_inches='tight', dpi=300)
+fig_sys.tight_layout()
+plt.subplots_adjust(hspace=0.3)
+fig_sys.savefig('acc_control.pdf', format='pdf', bbox_inches='tight', dpi=300)
 
 # --------- RLS subplots (1 row, 2 columns) -----------
-fig_rls, axes_rls = plt.subplots(1, 2, figsize=(4.5, 1.5))
+fig_rls, axes_rls = plt.subplots(2, 1, figsize=(4.5, 2))
 
 # Plot 1
 # axes[0].plot(time_state, v_traj_opt, label='velocity (OPT)')
@@ -451,8 +452,7 @@ axes_rls[0].axhline(y=para_star[0], label = r'$\mu^\ast_{\mathrm{aero}}$',
 axes_rls[0].legend()
 axes_rls[0].set_facecolor((0.95, 0.95, 0.95))
 axes_rls[0].grid(True, linestyle='--', color='white', linewidth=1)
-
-axes_rls[0].set_xlabel('Time[s]')
+axes_rls[0].set_xticklabels([])
 
 # Plot 2
 # axes[1].plot(time_state, D_traj_opt, label='distance (OPT)')
@@ -464,7 +464,18 @@ axes_rls[1].legend()
 axes_rls[1].set_facecolor((0.95, 0.95, 0.95))
 axes_rls[1].grid(True, linestyle='--', color='white', linewidth=1)
 
-axes_rls[1].set_xlabel('Time[s]')
+axins_1 = zoomed_inset_axes(axes_rls[1], zoom = 2.5, loc='upper center')
+plotter_kernel(axins_1, time, para_asf_traj[:, :, 1],
+               r'$\hat{v}_{\mathrm{f}}$', my_linewidth, myleaveyellow, linestyle_1)
+axins_1.axhline(y=para_star[1], label = r'$v^\ast_{\mathrm{f}}$',
+                    color=myleaveyellow_cop, linestyle=':', linewidth=my_linewidth)
+axins_1.set_xticks([])
+axins_1.yaxis.tick_right()
+axins_1.set_xlim(-0.1, 0.5)
+axins_1.set_ylim(21.8, 24.8)
+mark_inset(axes_rls[1], axins_1, loc1=2, loc2=4, fc="none", ec="gray")
+
+axes_rls[1].set_xlabel('Time [s]')
 
 fig_rls.tight_layout()
 
@@ -477,43 +488,45 @@ fig_rls.tight_layout()
 
 # # Set x-axis label only on the last plot
 # axes_rls[2].set_xlabel('Time[s]')
-fig_rls.savefig('est_performance.pdf', format='pdf', bbox_inches='tight', dpi=300)
 
 
-# --------- for reviewer additional plot (1 row, 2 columns) -----------
-fig_rw, axes_rw = plt.subplots(1, 2, figsize=(4.5, 1.5))
+# # --------- for reviewer additional plot (1 row, 2 columns) -----------
+# fig_rw, axes_rw = plt.subplots(1, 2, figsize=(4.5, 1.5))
 
-# Plot 1
-# axes[0].plot(time_state, v_traj_opt, label='velocity (OPT)')
-plotter_kernel(axes_rw[0], time_s, E_theta_traj_sf,
-               r'$E_{\theta,t}(x_t)$', my_linewidth, mydarkblue, linestyle_1)
-# axes_rls[0].set_title("RLS estimation with SMID")
-axes_rw[0].legend()
-axes_rw[0].set_facecolor((0.95, 0.95, 0.95))
-axes_rw[0].grid(True, linestyle='--', color='white', linewidth=1)
+# # Plot 1
+# # axes[0].plot(time_state, v_traj_opt, label='velocity (OPT)')
+# plotter_kernel(axes_rw[0], time_s, E_theta_traj_sf,
+#                r'$E_{\theta,t}(x_t)$', my_linewidth, mydarkblue, linestyle_1)
+# # axes_rls[0].set_title("RLS estimation with SMID")
+# axes_rw[0].legend()
+# axes_rw[0].set_facecolor((0.95, 0.95, 0.95))
+# axes_rw[0].grid(True, linestyle='--', color='white', linewidth=1)
 
-axes_rw[0].set_xlabel('Time[s]')
+# axes_rw[0].set_xlabel('Time[s]')
 
-# Plot 2
-# axes[1].plot(time_state, D_traj_opt, label='distance (OPT)')
-plotter_kernel(axes_rw[1], time, bound_asf_traj,
-               r'$\varepsilon_{\theta,t}(2)$', my_linewidth, myleaveyellow, linestyle_1)
-axes_rw[1].legend()
-axes_rw[1].set_facecolor((0.95, 0.95, 0.95))
-axes_rw[1].grid(True, linestyle='--', color='white', linewidth=1)
+# # Plot 2
+# # axes[1].plot(time_state, D_traj_opt, label='distance (OPT)')
+# plotter_kernel(axes_rw[1], time, bound_asf_traj,
+#                r'$\varepsilon_{\theta,t}(2)$', my_linewidth, myleaveyellow, linestyle_1)
+# axes_rw[1].legend()
+# axes_rw[1].set_facecolor((0.95, 0.95, 0.95))
+# axes_rw[1].grid(True, linestyle='--', color='white', linewidth=1)
 
-axes_rw[1].set_xlabel('Time[s]')
+# axes_rw[1].set_xlabel('Time[s]')
 
-fig_rw.tight_layout()
+# fig_rw.tight_layout()
 
-# # Plot 3
-# axes_rls[2].plot(dt * time, bound_traj, label=r'$\varepsilon_{\theta,t}(1)$')
-# # axes[1].axhline(y=para_star[1], label = 'true velocity', color='r', linestyle='--', linewidth=2)
-# axes_rls[2].legend()
-# axes_rls[2].set_facecolor((0.95, 0.95, 0.95))
-# axes_rls[2].grid(True, linestyle='--', color='white', linewidth=1)
+# # # Plot 3
+# # axes_rls[2].plot(dt * time, bound_traj, label=r'$\varepsilon_{\theta,t}(1)$')
+# # # axes[1].axhline(y=para_star[1], label = 'true velocity', color='r', linestyle='--', linewidth=2)
+# # axes_rls[2].legend()
+# # axes_rls[2].set_facecolor((0.95, 0.95, 0.95))
+# # axes_rls[2].grid(True, linestyle='--', color='white', linewidth=1)
 
-# # Set x-axis label only on the last plot
-# axes_rls[2].set_xlabel('Time[s]')
-fig_rw.savefig('reviewer.pdf', format='pdf', bbox_inches='tight', dpi=300)
+# # # Set x-axis label only on the last plot
+# # axes_rls[2].set_xlabel('Time[s]')
+# fig_rw.savefig('reviewer.pdf', format='pdf', bbox_inches='tight', dpi=300)
+plt.subplots_adjust(hspace=0.3)
+
+fig_rls.savefig('acc_estimation.pdf', format='pdf', bbox_inches='tight', dpi=300)
 plt.show()

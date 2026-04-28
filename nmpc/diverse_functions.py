@@ -30,6 +30,8 @@ input: u -> acceleration
 
 """
 
+from turtle import mode
+
 import casadi as ca
 import numpy as np
 
@@ -337,5 +339,186 @@ def sacc_kernel(x, dt = 0.1, mode="SIM"):
         return dt * ca.horzcat(row1, row2)
     elif mode == "SIM":
         return dt * np.array([[x[0]**2 / m, 0.0], [0.0, -1.0]])
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+# ----------------------- Speed Regulation of PMSM Drives ----------------------------
+def pmsm_drift(x, pmsm_paras, dt = 1e-4, mode="SIM"):
+    """
+    This is the drift term of the PMSM dynamics
+
+    Input
+    1) x: state
+        x[0] -> angular velocity
+        x[1] -> q-axis current
+    2) dt: sampling time
+    3) pmsm_paras: dictionary of the PMSM parameters, including
+       - 'R': resistance [Ohm]
+       - 'L': inductance [H]
+    """
+    R = pmsm_paras['R'] # resistance
+    L = pmsm_paras['L'] # inductance
+    J = pmsm_paras['J'] # inertia
+    T_load = pmsm_paras['T_load'] # load torque
+
+    fd_omega = x[0] - dt * T_load / J
+    fd_iq = x[1]
+    if mode == "NLP":
+        return ca.vertcat(fd_omega, fd_iq)
+    elif mode == "SIM":
+        return np.array([fd_omega, fd_iq])
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+
+def pmsm_kernel(x, pmsm_paras, dt = 1e-4, mode="SIM"):
+    """
+    This is the kernel of the parametric coupling terms in the PMSM dynamics
+
+    The couplind parameters are given by
+    theta = [B/J, phi/J, phi] 
+
+    Input
+    1) x: state
+        x[0] -> angular velocity
+        x[1] -> q-axis current
+    2) dt: sampling time
+    3) pmsm_paras: dictionary of the PMSM parameters, including
+         - 'num_pole': number of pole pairs
+         - 'L': inductance [H]
+
+    REMARK: be careful about the transpose given in the system dynamics.
+            So, here it needs to be tranposed again
+
+    """
+    num_pole = pmsm_paras['num_pole'] # number of pole pairs
+    L = pmsm_paras['L'] # inductance
+    J = pmsm_paras['J'] # inertia
+
+    if mode == "NLP":
+        row1 = ca.horzcat(-num_pole * x[1] * dt /  J, num_pole * x[0] * dt / L)
+        row2 = ca.horzcat(x[0] * dt/ J, 0.0)
+        row3 = ca.horzcat(0.0, x[1] * dt / L)
+        return ca.vertcat(row1, row2, row3)
+    elif mode == "SIM":
+        return dt * np.array([[-num_pole * x[1]/  J, num_pole * x[0]/ L], [x[0] / J, 0.0], [0.0, x[1] / L]]) 
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+
+def pmsm_gu(x, pmsm_paras, dt = 1e-4, mode="SIM"):
+    """
+    This is the dynamics term without kernel
+
+    Input
+    1) x: state
+        x[0] -> angular velocity
+        x[1] -> q-axis current
+    2) dt: sampling time
+    3) pmsm_paras: dictionary of the PMSM parameters, including
+         - 'L': inductance [H]
+    """
+    # R = 0.36 # resistance
+    L = pmsm_paras['L'] # inductance
+
+    g_omega = 0
+    g_iq = dt / L
+
+    if mode == "NLP":
+        return ca.vertcat(g_omega, g_iq)
+    elif mode == "SIM":
+        return np.array([g_omega, g_iq])
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+
+def pmsm_gw(x, pmsm_paras, dt = 1e-4, mode="SIM"):
+    """
+    This is the noise term in the PMSM dynamics
+
+    Input
+    1) x: state
+        x[0] -> angular velocity
+        x[1] -> q-axis current
+    2) dt: sampling time
+    3) pmsm_paras: dictionary of the PMSM parameters, including
+         - 'J': inertia [kg*m^2]
+         - 'num_pole': number of pole pairs
+    """
+    num_pole = pmsm_paras['num_pole'] # number of pole pairs
+    J = pmsm_paras['J'] # inertia
+
+    g_omega = -1 / J * dt
+    g_iq = -num_pole * x[0] * dt
+
+    if mode == "NLP":
+        return ca.vertcat(g_omega, g_iq)
+    elif mode == "SIM":
+        return np.array([g_omega, g_iq])
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+# additional two functions for the use of safety filter
+def pmsm_dynamics(x, u, para: np.ndarray = np.zeros(3), dt = 0.1, mode="SIM"):
+    """
+    Compute the next state based on the NOMINAL discrete-time model.
+
+    Parameters:
+        x: casadi.SX or MX, current state vector.
+        u: casadi.SX or MX, control input vector.
+        para: ndarray, estimated system parameters
+        dt: float, sampling time (default is 0.1 seconds)
+        mode: "NLP" or "SIM" depending on the purpose of usage:
+            1) "NLP" for optimization in MPC
+            2) "SIM" for simulation and general Numpy based calculations
+
+    Returns:
+        x_next: casadi.SX or MX, next state vector. (Or just numpy array)
+    """
+    T_load = 2.25 # the load torque [N*m]
+    L = 2.9e-3 # inductance [H]
+    R = 0.8 # resistance [Ohm]
+    num_pole = 4 # number of pole pairs
+
+    dot_omega = (num_pole*para[0]*x[1] - T_load - para[2]*x[0]) / para[1]
+    dot_iq = (-num_pole*para[0]*x[0] - R*x[1] + u[0]) / L
+
+    if mode == "NLP":
+        x_next = ca.vertcat(x[0] + dot_omega * dt, x[1] + dot_iq * dt)
+    elif mode == "SIM":
+        x_next = np.array([x[0] + dot_omega * dt, x[1] + dot_iq * dt])
+    else:
+        raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")
+
+    return x_next
+
+def pmsm_kernel_opt(x, dt = 1e-4, mode="SIM"):
+    """
+    This is the kernel of the parametric coupling terms in the PMSM dynamics
+
+    The couplind parameters are given by
+    theta = [phi, B, R] 
+
+    Input
+    1) x: state
+        x[0] -> angular velocity
+        x[1] -> q-axis current
+    2) dt: sampling time
+
+    REMARK: be careful about the transpose given in the system dynamics.
+            So, here it needs to be tranposed again
+
+    """
+    num_pole = 4 # number of pole pairs
+    L = 2.9e-3 # inductance
+    J = 2.35e-4 # inertia
+
+    if mode == "NLP":
+        row1 = ca.horzcat(-num_pole * x[1] * dt /  J, num_pole * x[0] * dt / L)
+        row2 = ca.horzcat(x[0] * dt/ J, 0.0)
+        row3 = ca.horzcat(0.0, x[1] * dt / L)
+        return ca.vertcat(row1, row2, row3)
+    elif mode == "SIM":
+        return dt * np.array([[-num_pole * x[1]/  J, num_pole * x[0]/ L], [x[0] / J, 0.0], [0.0, x[1] / L]])    
     else:
         raise ValueError("Invalid input! Please use 'NLP' for optimizatoin or 'SIM' for simulation.")

@@ -12,6 +12,7 @@ The controller uses CasADi for symbolic modeling and the optimizer within CasADi
 
 import casadi as ca
 import numpy as np
+import control as ctrl
 
 class MPCController:
     """
@@ -239,3 +240,61 @@ class RAMPCACC:
         # Extract the first control input
         u_0 = sol.value(self.U[:, 0])
         return np.atleast_1d(u_0)
+    
+
+class PPD_PMSM_Controller:
+    """
+    This is a simple pole placement (PD) plus integral (I) action controller for the PMSM drive.
+
+    The control input is has two parts: PD based on pole placement and an integral action.
+    """
+    def __init__(self, A, B, desired_poles, int_omega_error_gain = 1e-6):
+        """
+        Initialize the pole placement controller.
+
+            :param A: system matrix
+            :param B: input matrix
+            :param desired_poles: list of desired closed-loop pole locations
+        """
+        K = ctrl.place(A, B, desired_poles)
+        self.K = K
+        self.int_omega_error_gain = int_omega_error_gain
+
+    def compute_control(self, omega_ref, x_current, pmsm_params, est_params, int_omega_error):
+        """
+        Compute the control input based on the current state and the LQR gain.
+
+            :param omega_ref: reference angular velocity
+            :param x_current: current state (angular velocity + q-axis current)
+            :param pmsm_params: dictionary containing PMSM parameters
+            :param est_params: the estimated parameters (B and phi) from the RLS estimator
+            :param load: the load torque
+            :param int_omega_error: integral of the angular velocity error
+
+            :return: control input (q-axis current reference)
+        """
+        # compute the reference current
+        id_ref = ( est_params[1] * omega_ref + pmsm_params['T_load'] ) / (est_params[0] * pmsm_params['num_pole'])
+
+        # compute the reference input
+        u_ref = est_params[0] * pmsm_params['num_pole'] * omega_ref + est_params[2] * id_ref
+
+        # obtain the PD control input
+        u = u_ref - self.K @ (x_current - np.array([omega_ref, id_ref]))
+
+        # --------- I term control ----------
+        # compute the speed tracking error
+        omega_err = x_current[0] - omega_ref
+
+        # update the integral term
+        int_omega_error += omega_err
+
+        # compute the integral control input
+        u_i = self.int_omega_error_gain * int_omega_error
+
+        # combine all control inputs
+        u = u - u_i
+
+        u_sat = np.clip(u, -pmsm_params['u_lim'], pmsm_params['u_lim'])
+
+        return np.atleast_1d(u_sat), int_omega_error
